@@ -7,6 +7,7 @@ import static javax.ws.rs.core.Response.Status.BAD_REQUEST;
 import static javax.ws.rs.core.Response.Status.NOT_FOUND;
 import static org.folio.okapi.common.XOkapiHeaders.TENANT;
 
+import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -20,10 +21,13 @@ import javax.ws.rs.NotFoundException;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.folio.rest.jaxrs.model.Attachment;
 import org.folio.rest.jaxrs.model.LocalizedTemplatesProperty;
 import org.folio.rest.jaxrs.model.Meta;
 import org.folio.rest.jaxrs.model.Result;
 import org.folio.rest.jaxrs.model.Template;
+import org.folio.rest.jaxrs.model.TemplatePreviewRequest;
+import org.folio.rest.jaxrs.model.TemplatePreviewResult;
 import org.folio.rest.jaxrs.model.TemplateProcessingRequest;
 import org.folio.rest.jaxrs.model.TemplateProcessingResult;
 import org.folio.template.InUseTemplateException;
@@ -45,6 +49,11 @@ import io.vertx.core.json.JsonObject;
 public class TemplateServiceImpl implements TemplateService {
 
   private static final Logger LOG = LogManager.getLogger("mod-template-engine");
+  private static final LocaleSettings DEFAULT_LOCALE = new LocaleSettings("en-US", "UTC");
+  private static final String PREVIEW_OUTPUT_FORMAT = "text/html";
+
+  private record Rendered(JsonObject content, List<Attachment> attachments) {}
+
   private Vertx vertx;
   private TemplateDao templateDao;
   private Map<String, String> templateResolverAddressesMap;
@@ -139,21 +148,16 @@ public class TemplateServiceImpl implements TemplateService {
 
         LocaleSettings config = compositeFuture.resultAt(1);
 
-        TemplateContextPreProcessor preProcessor = new TemplateContextPreProcessor(templateContent, contextObject, config);
-        preProcessor.process();
-
         validateTemplate(template);
-        String templateResolverAddress = templateResolverAddressesMap.get(template.getTemplateResolver());
-        TemplateResolver templateResolverProxy = TemplateResolver.createProxy(vertx, templateResolverAddress);
-
-        return templateResolverProxy.processTemplate(mapFrom(templateContent), contextObject, templateRequest.getOutputFormat())
-          .map(processedContent -> {
-            Result processedTemplate = processedContent
+        return render(templateContent, contextObject, template.getTemplateResolver(),
+            templateRequest.getOutputFormat(), config)
+          .map(rendered -> {
+            Result processedTemplate = rendered.content()
               .mapTo(Result.class)
-              .withAttachments(preProcessor.getAttachments());
+              .withAttachments(rendered.attachments());
             Meta resultMetaInfo = new Meta()
               .withSize(StringUtils.length(processedTemplate.getBody()))
-              .withDateCreate(new Date())
+              .withDateCreate(Date.from(Instant.now()))
               .withLang(templateRequest.getLang())
               .withOutputFormat(templateRequest.getOutputFormat());
 
@@ -165,6 +169,41 @@ public class TemplateServiceImpl implements TemplateService {
               .withTemplateId(templateRequest.getTemplateId());
           });
       });
+  }
+
+  @Override
+  public Future<TemplatePreviewResult> previewTemplate(TemplatePreviewRequest req) {
+    LOG.debug("previewTemplate:: Rendering inline template preview");
+    return settingsClient.lookupLocaleSetting()
+      .recover(t -> {
+        LOG.warn("previewTemplate:: locale lookup failed, using defaults: {}", t.getMessage());
+        return Future.succeededFuture(DEFAULT_LOCALE);
+      })
+      .compose(config -> {
+        LocalizedTemplatesProperty content = new LocalizedTemplatesProperty()
+          .withHeader(Objects.requireNonNullElse(req.getHeader(), ""))
+          .withBody(Objects.requireNonNullElse(req.getBody(), ""));
+        JsonObject ctx = Optional.ofNullable(req.getContext())
+          .map(JsonObject::mapFrom)
+          .orElse(new JsonObject());
+        return render(content, ctx, "mustache", PREVIEW_OUTPUT_FORMAT, config)
+          .map(rendered -> new TemplatePreviewResult()
+            .withHeader(Objects.requireNonNullElse(rendered.content().getString("header"), ""))
+            .withBody(Objects.requireNonNullElse(rendered.content().getString("body"), "")))
+          .recover(t -> failedFuture(
+            new BadRequestException("Template could not be rendered: " + t.getMessage())));
+      });
+  }
+
+  private Future<Rendered> render(LocalizedTemplatesProperty content, JsonObject context,
+                                  String resolverName, String outputFormat, LocaleSettings config) {
+    LOG.debug("render:: Preprocessing and resolving template");
+    var preProcessor = new TemplateContextPreProcessor(content, context, config);
+    preProcessor.process();
+    String address = templateResolverAddressesMap.get(resolverName);
+    return TemplateResolver.createProxy(vertx, address)
+      .processTemplate(mapFrom(content), context, outputFormat)
+      .map(json -> new Rendered(json, preProcessor.getAttachments()));
   }
 
   private void validateTemplate(Template template) {
