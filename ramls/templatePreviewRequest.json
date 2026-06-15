@@ -11,6 +11,11 @@
       "type": "string",
       "description": "Template for body"
     },
+    "templateResolver": {
+      "type": "string",
+      "description": "Template engine name (defaults to 'handlebars' when omitted)",
+      "default": "handlebars"
+    },
     "context": {
       "type": "object",
       "description": "Context object",

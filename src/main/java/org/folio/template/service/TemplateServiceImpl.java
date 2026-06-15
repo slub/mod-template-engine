@@ -51,6 +51,7 @@ public class TemplateServiceImpl implements TemplateService {
   private static final Logger LOG = LogManager.getLogger("mod-template-engine");
   private static final LocaleSettings DEFAULT_LOCALE = new LocaleSettings("en-US", "UTC");
   private static final String PREVIEW_OUTPUT_FORMAT = "text/html";
+  private static final String DEFAULT_TEMPLATE_RESOLVER = "handlebars";
 
   private record Rendered(JsonObject content, List<Attachment> attachments) {}
 
@@ -84,6 +85,7 @@ public class TemplateServiceImpl implements TemplateService {
   @Override
   public Future<String> addTemplate(Template template) {
     LOG.debug("addTemplate:: Adding Template with ID : {}", template.getId());
+    applyDefaultResolver(template);
     validateTemplate(template);
     if (template.getId() == null) {
       template.setId(UUID.randomUUID().toString());
@@ -94,6 +96,7 @@ public class TemplateServiceImpl implements TemplateService {
   @Override
   public Future<Boolean> updateTemplate(Template template) {
     LOG.debug("updateTemplate:: Updating Template with ID : {}", template.getId());
+    applyDefaultResolver(template);
     validateTemplate(template);
     return getTemplateById(template.getId())
       .compose(optionalTemplate -> optionalTemplate
@@ -148,6 +151,7 @@ public class TemplateServiceImpl implements TemplateService {
 
         LocaleSettings config = compositeFuture.resultAt(1);
 
+        applyDefaultResolver(template);
         validateTemplate(template);
         return render(templateContent, contextObject, template.getTemplateResolver(),
             templateRequest.getOutputFormat(), config)
@@ -180,13 +184,15 @@ public class TemplateServiceImpl implements TemplateService {
         return Future.succeededFuture(DEFAULT_LOCALE);
       })
       .compose(config -> {
+        String resolver = StringUtils.defaultIfBlank(req.getTemplateResolver(), DEFAULT_TEMPLATE_RESOLVER);
+        validateTemplateResolverSupported(resolver);
         LocalizedTemplatesProperty content = new LocalizedTemplatesProperty()
           .withHeader(Objects.requireNonNullElse(req.getHeader(), ""))
           .withBody(Objects.requireNonNullElse(req.getBody(), ""));
         JsonObject ctx = Optional.ofNullable(req.getContext())
           .map(JsonObject::mapFrom)
           .orElse(new JsonObject());
-        return render(content, ctx, "mustache", PREVIEW_OUTPUT_FORMAT, config)
+        return render(content, ctx, resolver, PREVIEW_OUTPUT_FORMAT, config)
           .map(rendered -> new TemplatePreviewResult()
             .withHeader(Objects.requireNonNullElse(rendered.content().getString("header"), ""))
             .withBody(Objects.requireNonNullElse(rendered.content().getString("body"), "")))
@@ -206,11 +212,21 @@ public class TemplateServiceImpl implements TemplateService {
       .map(json -> new Rendered(json, preProcessor.getAttachments()));
   }
 
+  private void applyDefaultResolver(Template template) {
+    if (StringUtils.isBlank(template.getTemplateResolver())) {
+      template.setTemplateResolver(DEFAULT_TEMPLATE_RESOLVER);
+    }
+  }
+
   private void validateTemplate(Template template) {
     LOG.debug("validateTemplate:: Validating Template with ID : {}", template.getId());
-    if (!templateResolverAddressesMap.containsKey(template.getTemplateResolver())) {
-      LOG.warn("Template resolver {} is not Supported", template.getTemplateResolver());
-      String message = String.format("Template resolver '%s' is not supported", template.getTemplateResolver());
+    validateTemplateResolverSupported(template.getTemplateResolver());
+  }
+
+  private void validateTemplateResolverSupported(String templateResolver) {
+    if (!templateResolverAddressesMap.containsKey(templateResolver)) {
+      LOG.warn("Template resolver {} is not Supported", templateResolver);
+      String message = String.format("Template resolver '%s' is not supported", templateResolver);
       throw new BadRequestException(message);
     }
   }

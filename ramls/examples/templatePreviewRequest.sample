@@ -1,6 +1,7 @@
 {
   "header": "Welcome back, {{user.name}}!",
   "body": "Hi {{user.name}}, your {{user.pet.type}} {{user.pet.name}} has a message for you: {{{user.pet.hint}}}",
+  "templateResolver": "handlebars",
   "context": {
     "user": {
       "name": "Alex",
