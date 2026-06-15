@@ -142,7 +142,7 @@ public class TemplateServiceImpl implements TemplateService {
         TemplateContextPreProcessor preProcessor = new TemplateContextPreProcessor(templateContent, contextObject, config);
         preProcessor.process();
 
-        validateTemplateResolverSupported(template.getTemplateResolver());
+        validateTemplate(template);
         String templateResolverAddress = templateResolverAddressesMap.get(template.getTemplateResolver());
         TemplateResolver templateResolverProxy = TemplateResolver.createProxy(vertx, templateResolverAddress);
 
@@ -169,13 +169,9 @@ public class TemplateServiceImpl implements TemplateService {
 
   private void validateTemplate(Template template) {
     LOG.debug("validateTemplate:: Validating Template with ID : {}", template.getId());
-    validateTemplateResolverSupported(template.getTemplateResolver());
-  }
-
-  private void validateTemplateResolverSupported(String templateResolver) {
-    if (!templateResolverAddressesMap.containsKey(templateResolver)) {
-      LOG.warn("Template resolver {} is not Supported", templateResolver);
-      String message = String.format("Template resolver '%s' is not supported", templateResolver);
+    if (!templateResolverAddressesMap.containsKey(template.getTemplateResolver())) {
+      LOG.warn("Template resolver {} is not Supported", template.getTemplateResolver());
+      String message = String.format("Template resolver '%s' is not supported", template.getTemplateResolver());
       throw new BadRequestException(message);
     }
   }
