@@ -6,6 +6,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import io.vertx.core.Promise;
+import io.vertx.serviceproxy.ServiceException;
 import org.folio.HttpStatus;
 
 import org.apache.logging.log4j.LogManager;
@@ -45,6 +46,18 @@ public final class TemplateEngineHelper {
       return Response.status(HttpStatus.SC_BAD_REQUEST)
         .type(MediaType.TEXT_PLAIN_TYPE)
         .entity("Cannot delete template which is currently in use")
+        .build();
+    }
+
+    // A resolver running across the EventBus service proxy reports an author/template
+    // error (e.g. malformed Handlebars) as a ServiceException carrying HTTP 400 as its
+    // failure code; the original exception type is erased in transit.
+    if (throwable instanceof ServiceException serviceException
+        && serviceException.failureCode() == HttpStatus.SC_BAD_REQUEST) {
+      LOG.warn("Template resolver reported a client error", throwable);
+      return Response.status(HttpStatus.SC_BAD_REQUEST)
+        .type(MediaType.TEXT_PLAIN)
+        .entity(throwable.getMessage())
         .build();
     }
 

@@ -17,6 +17,7 @@ import java.util.UUID;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.NotFoundException;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.folio.rest.jaxrs.model.LocalizedTemplatesProperty;
@@ -141,6 +142,7 @@ public class TemplateServiceImpl implements TemplateService {
         TemplateContextPreProcessor preProcessor = new TemplateContextPreProcessor(templateContent, contextObject, config);
         preProcessor.process();
 
+        validateTemplateResolverSupported(template.getTemplateResolver());
         String templateResolverAddress = templateResolverAddressesMap.get(template.getTemplateResolver());
         TemplateResolver templateResolverProxy = TemplateResolver.createProxy(vertx, templateResolverAddress);
 
@@ -150,7 +152,7 @@ public class TemplateServiceImpl implements TemplateService {
               .mapTo(Result.class)
               .withAttachments(preProcessor.getAttachments());
             Meta resultMetaInfo = new Meta()
-              .withSize(processedTemplate.getBody().length())
+              .withSize(StringUtils.length(processedTemplate.getBody()))
               .withDateCreate(new Date())
               .withLang(templateRequest.getLang())
               .withOutputFormat(templateRequest.getOutputFormat());
@@ -167,10 +169,13 @@ public class TemplateServiceImpl implements TemplateService {
 
   private void validateTemplate(Template template) {
     LOG.debug("validateTemplate:: Validating Template with ID : {}", template.getId());
-    boolean templateResolverIsSupported = templateResolverAddressesMap.containsKey(template.getTemplateResolver());
-    if (!templateResolverIsSupported) {
-      LOG.warn("Template resolver {} is not Supported", template.getTemplateResolver());
-      String message = String.format("Template resolver '%s' is not supported", template.getTemplateResolver());
+    validateTemplateResolverSupported(template.getTemplateResolver());
+  }
+
+  private void validateTemplateResolverSupported(String templateResolver) {
+    if (!templateResolverAddressesMap.containsKey(templateResolver)) {
+      LOG.warn("Template resolver {} is not Supported", templateResolver);
+      String message = String.format("Template resolver '%s' is not supported", templateResolver);
       throw new BadRequestException(message);
     }
   }
