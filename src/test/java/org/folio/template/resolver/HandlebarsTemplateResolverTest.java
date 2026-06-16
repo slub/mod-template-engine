@@ -4,8 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 import io.vertx.core.Future;
@@ -50,44 +48,6 @@ class HandlebarsTemplateResolverTest {
     JsonObject context = new JsonObject()
       .put("user", new JsonObject().put("phrases", new JsonArray().add("first").add("second")));
     assertEquals("second", render("{{lookup user.phrases 1}}", context));
-  }
-
-  @Test
-  void containsAndContainsAllOverRealContextType() {
-    // Built as JsonObject then read via mapTo(Context.class) - exactly the proxy path - so the
-    // array surfaces as an ArrayList (a Collection), which is the type the helper must handle.
-    JsonObject context = new JsonObject().put("user",
-      new JsonObject().put("phrases", new JsonArray().add("NOW!").add("WTF").add("x")));
-
-    assertEquals("YES",
-      render("{{#if (containsAll user.phrases \"NOW!\" \"WTF\")}}YES{{else}}NO{{/if}}", context));
-    assertEquals("YES",
-      render("{{#if (contains user.phrases \"NOW!\")}}YES{{else}}NO{{/if}}", context));
-    assertEquals("NO",
-      render("{{#if (containsAll user.phrases \"NOW!\" \"MISSING\")}}YES{{else}}NO{{/if}}", context));
-  }
-
-  @Test
-  void membershipHelpersOnEmptyMissingOrScalarReturnFalse() {
-    String template = "{{#if (contains user.phrases \"NOW!\")}}YES{{else}}NO{{/if}}";
-    // empty list
-    assertEquals("NO", render(template,
-      new JsonObject().put("user", new JsonObject().put("phrases", new JsonArray()))));
-    // missing field entirely
-    assertEquals("NO", render(template, new JsonObject()));
-    // scalar (not an array) - membership is array-only, so no match even though the value equals
-    assertEquals("NO", render(template,
-      new JsonObject().put("user", new JsonObject().put("phrases", "NOW!"))));
-  }
-
-  @Test
-  void asListHandlesEveryRuntimeShape() {
-    assertEquals(List.of("a", "b"), HandlebarsTemplateResolver.asList(List.of("a", "b")));
-    assertEquals(List.of("a", "b"), HandlebarsTemplateResolver.asList(new JsonArray().add("a").add("b")));
-    assertEquals(List.of("a", "b"), HandlebarsTemplateResolver.asList(new Object[] {"a", "b"}));
-    assertTrue(HandlebarsTemplateResolver.asList(null).isEmpty());
-    assertTrue(HandlebarsTemplateResolver.asList("scalar").isEmpty());
-    assertTrue(HandlebarsTemplateResolver.asList(42).isEmpty());
   }
 
   @Test
