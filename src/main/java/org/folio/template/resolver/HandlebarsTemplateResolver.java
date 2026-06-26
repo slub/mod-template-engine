@@ -2,16 +2,28 @@ package org.folio.template.resolver;
 
 import static org.folio.HttpStatus.SC_BAD_REQUEST;
 
+import java.text.NumberFormat;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.FormatStyle;
+import java.time.temporal.TemporalAccessor;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.folio.template.util.TemplateEngineHelper;
 
 import com.github.jknack.handlebars.Context;
 import com.github.jknack.handlebars.EscapingStrategy;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.HandlebarsException;
+import com.github.jknack.handlebars.Options;
 import com.github.jknack.handlebars.cache.ConcurrentMapTemplateCache;
 import com.github.jknack.handlebars.helper.ConditionalHelpers;
 import com.github.jknack.handlebars.helper.StringHelpers;
@@ -38,6 +50,99 @@ public class HandlebarsTemplateResolver implements TemplateResolver {
       .with(new ConcurrentMapTemplateCache());
     this.handlebars.registerHelpers(ConditionalHelpers.class);
     this.handlebars.registerHelpers(StringHelpers.class);
+    // nl2br: HTML-escape the value, then turn CRLF/CR/LF line breaks into <br>. The result is
+    // wrapped in a SafeString so the already-escaped markup is emitted verbatim. Authors use it
+    // as {{nl2br order.notes}} to preserve multi-line text in HTML email output.
+    this.handlebars.registerHelper("nl2br", (Object value, Options options) -> {
+      if (value == null) {
+        return "";
+      }
+      String escaped = Handlebars.Utils.escapeExpression(value.toString()).toString();
+      String withBreaks = escaped.replaceAll("\\r\\n|\\r|\\n", "<br>\n");
+      return new Handlebars.SafeString(withBreaks);
+    });
+    // numberFormat: locale-aware number formatting, the Java equivalent of Intl.NumberFormat.
+    // Used as {{numberFormat amount locale="de-DE" minDecimals=2 maxDecimals=2}}.
+    // locale defaults to the tenant locale, then en-US. min/maxDecimals are optional.
+    this.handlebars.registerHelper("numberFormat", (Object value, Options options) -> {
+      if (value == null) {
+        return "";
+      }
+      double number = value instanceof Number n ? n.doubleValue() : Double.parseDouble(value.toString());
+      // locale precedence: explicit hash > tenant locale carried in the context > en-US.
+      String localeTag = options.hash("locale");
+      if (localeTag == null) {
+        localeTag = options.get(TemplateEngineHelper.TENANT_LOCALE_CONTEXT_KEY);
+      }
+      Locale locale = Locale.forLanguageTag(StringUtils.defaultIfBlank(localeTag, "en-US"));
+      NumberFormat formatter = NumberFormat.getNumberInstance(locale);
+      Number minDecimals = options.hash("minDecimals");
+      if (minDecimals != null) {
+        formatter.setMinimumFractionDigits(minDecimals.intValue());
+      }
+      Number maxDecimals = options.hash("maxDecimals");
+      if (maxDecimals != null) {
+        formatter.setMaximumFractionDigits(maxDecimals.intValue());
+      }
+      return formatter.format(number);
+    });
+    // dateFormat: locale-aware date formatting for raw ISO date values. Note tokens ending in
+    // Date/DateTime/DetailedDateTime are already localized by ContextDateTimeFormatter before
+    // rendering, so this is meant for other ISO date values. locale precedence matches
+    // numberFormat (hash > tenant locale > en-US). An optional pattern overrides the localized
+    // style; otherwise a localized MEDIUM date is used. Unparseable input is returned unchanged
+    // so a bad value never fails the whole render.
+    // Used as {{dateFormat someIsoDate locale="de-DE" pattern="yyyy-MM-dd"}}.
+    this.handlebars.registerHelper("dateFormat", (Object value, Options options) -> {
+      if (value == null) {
+        return "";
+      }
+      String raw = value.toString();
+      if (StringUtils.isBlank(raw)) {
+        return "";
+      }
+      String localeTag = options.hash("locale");
+      if (localeTag == null) {
+        localeTag = options.get(TemplateEngineHelper.TENANT_LOCALE_CONTEXT_KEY);
+      }
+      Locale locale = Locale.forLanguageTag(StringUtils.defaultIfBlank(localeTag, "en-US"));
+      TemporalAccessor temporal = parseIsoDateTime(raw);
+      if (temporal == null) {
+        LOG.debug("dateFormat:: value is not an ISO date, returning unchanged: {}", raw);
+        return raw;
+      }
+      String pattern = options.hash("pattern");
+      DateTimeFormatter formatter = pattern != null
+        ? DateTimeFormatter.ofPattern(pattern, locale)
+        : DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale);
+      try {
+        return formatter.format(temporal);
+      } catch (java.time.DateTimeException e) {
+        // e.g. a time-based pattern applied to a date-only value
+        LOG.debug("dateFormat:: cannot format {} with pattern {}: {}", raw, pattern, e.getMessage());
+        return raw;
+      }
+    });
+  }
+
+  // Parses an ISO-8601 date or date-time, tolerating an optional zone offset and date-only
+  // values. Returns null when the input is not a recognizable ISO temporal.
+  private static TemporalAccessor parseIsoDateTime(String raw) {
+    try {
+      return OffsetDateTime.parse(raw);
+    } catch (DateTimeParseException ignored) {
+      // not an offset date-time, fall through
+    }
+    try {
+      return LocalDateTime.parse(raw);
+    } catch (DateTimeParseException ignored) {
+      // not a local date-time, fall through
+    }
+    try {
+      return LocalDate.parse(raw);
+    } catch (DateTimeParseException ignored) {
+      return null;
+    }
   }
 
   @Override

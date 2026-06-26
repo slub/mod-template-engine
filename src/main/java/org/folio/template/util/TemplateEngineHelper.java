@@ -20,6 +20,11 @@ public final class TemplateEngineHelper {
 
   public static final String TEMPLATE_RESOLVERS_LOCAL_MAP = "template-resolvers.map";
 
+  // Reserved context key used to carry the tenant's configured locale (BCP-47 language tag)
+  // to template resolvers, so locale-aware helpers (e.g. Handlebars numberFormat) can default
+  // to it. The underscore prefix avoids collision with author-supplied tokens.
+  public static final String TENANT_LOCALE_CONTEXT_KEY = "_tenantLocale";
+
   private TemplateEngineHelper() {
   }
 

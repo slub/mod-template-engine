@@ -206,6 +206,12 @@ public class TemplateServiceImpl implements TemplateService {
     LOG.debug("render:: Preprocessing and resolving template");
     var preProcessor = new TemplateContextPreProcessor(content, context, config);
     preProcessor.process();
+    // Carry the tenant locale to the resolver so locale-aware helpers can default to it.
+    // The resolver is a shared singleton across tenants, so this must travel per-request
+    // in the context rather than being held as resolver state.
+    if (config != null && StringUtils.isNotBlank(config.getLanguageTag())) {
+      context.put(TemplateEngineHelper.TENANT_LOCALE_CONTEXT_KEY, config.getLanguageTag());
+    }
     String address = templateResolverAddressesMap.get(resolverName);
     return TemplateResolver.createProxy(vertx, address)
       .processTemplate(mapFrom(content), context, outputFormat)
