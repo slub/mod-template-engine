@@ -70,6 +70,13 @@ class HandlebarsTemplateResolverTest {
   }
 
   @Test
+  void equalsAnyWorksAsBlockHelper() {
+    JsonObject context = new JsonObject().put("format", "P/E Mix");
+    assertEquals("yes", render("{{#equalsAny format \"Physical Resource\" \"P/E Mix\"}}yes{{else}}no{{/equalsAny}}", context));
+    assertEquals("no", render("{{#equalsAny format \"Physical Resource\"}}yes{{else}}no{{/equalsAny}}", context));
+  }
+
+  @Test
   void malformedTemplateFailsWithClientError() {
     Future<JsonObject> future = resolver.processTemplate(
       new JsonObject().put("body", "{{#if x}}never closed"), new JsonObject(), "text/html");

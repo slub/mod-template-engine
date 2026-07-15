@@ -24,6 +24,7 @@ import com.github.jknack.handlebars.EscapingStrategy;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.HandlebarsException;
 import com.github.jknack.handlebars.Options;
+import com.github.jknack.handlebars.TagType;
 import com.github.jknack.handlebars.cache.ConcurrentMapTemplateCache;
 import com.github.jknack.handlebars.helper.ConditionalHelpers;
 import com.github.jknack.handlebars.helper.StringHelpers;
@@ -123,21 +124,27 @@ public class HandlebarsTemplateResolver implements TemplateResolver {
         return raw;
       }
     });
-    // equalsAny: string-equality membership test. True when the first value's string form equals
-    // any of the remaining arguments' string forms. A null/absent value yields false; every
-    // argument is coerced to its string form (so numbers etc. compare as text). Used in a block or
-    // subexpr, e.g. {{#if (equalsAny orderLine.orderFormat "P/E Mix" "Physical Resource")}}...{{/if}}.
+    // equalsAny: string-equality membership test. Matches when the first value's string form equals
+    // any of the remaining arguments' string forms. A null/absent value yields no match; every
+    // argument is coerced to its string form (so numbers etc. compare as text). Works both as a
+    // block helper -- {{#equalsAny orderLine.orderFormat "P/E Mix" "Physical Resource"}}...{{else}}
+    // ...{{/equalsAny}} renders the fn/inverse branch -- and inline/subexpression, where it returns
+    // the boolean, e.g. {{#if (equalsAny orderLine.orderFormat "P/E Mix" "Physical Resource")}}...{{/if}}.
     this.handlebars.registerHelper("equalsAny", (Object value, Options options) -> {
-      if (value == null) {
-        return Boolean.FALSE;
-      }
-      String target = value.toString();
-      for (Object candidate : options.params) {
-        if (candidate != null && target.equals(candidate.toString())) {
-          return Boolean.TRUE;
+      boolean matched = false;
+      if (value != null) {
+        String target = value.toString();
+        for (Object candidate : options.params) {
+          if (candidate != null && target.equals(candidate.toString())) {
+            matched = true;
+            break;
+          }
         }
       }
-      return Boolean.FALSE;
+      if (options.tagType == TagType.SECTION) {
+        return matched ? options.fn() : options.inverse();
+      }
+      return matched;
     });
   }
 
