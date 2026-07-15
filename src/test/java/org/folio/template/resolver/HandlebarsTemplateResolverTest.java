@@ -60,6 +60,16 @@ class HandlebarsTemplateResolverTest {
   }
 
   @Test
+  void equalsAnyMatchesAnyCandidate() {
+    JsonObject context = new JsonObject().put("format", "P/E Mix");
+    assertEquals("yes", render("{{#if (equalsAny format \"Physical Resource\" \"P/E Mix\")}}yes{{else}}no{{/if}}", context));
+    // whole-string equality, not substring
+    assertEquals("no", render("{{#if (equalsAny format \"Mix\")}}yes{{else}}no{{/if}}", context));
+    // missing/null value yields false rather than failing
+    assertEquals("no", render("{{#if (equalsAny missing \"x\")}}yes{{else}}no{{/if}}", new JsonObject()));
+  }
+
+  @Test
   void malformedTemplateFailsWithClientError() {
     Future<JsonObject> future = resolver.processTemplate(
       new JsonObject().put("body", "{{#if x}}never closed"), new JsonObject(), "text/html");

@@ -123,6 +123,22 @@ public class HandlebarsTemplateResolver implements TemplateResolver {
         return raw;
       }
     });
+    // equalsAny: string-equality membership test. True when the first value's string form equals
+    // any of the remaining arguments' string forms. A null/absent value yields false; every
+    // argument is coerced to its string form (so numbers etc. compare as text). Used in a block or
+    // subexpr, e.g. {{#if (equalsAny orderLine.orderFormat "P/E Mix" "Physical Resource")}}...{{/if}}.
+    this.handlebars.registerHelper("equalsAny", (Object value, Options options) -> {
+      if (value == null) {
+        return Boolean.FALSE;
+      }
+      String target = value.toString();
+      for (Object candidate : options.params) {
+        if (candidate != null && target.equals(candidate.toString())) {
+          return Boolean.TRUE;
+        }
+      }
+      return Boolean.FALSE;
+    });
   }
 
   // Parses an ISO-8601 date or date-time, tolerating an optional zone offset and date-only
