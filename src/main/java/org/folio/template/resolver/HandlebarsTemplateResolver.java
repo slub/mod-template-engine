@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
@@ -40,6 +41,7 @@ import io.vertx.serviceproxy.ServiceException;
 public class HandlebarsTemplateResolver implements TemplateResolver {
 
   private static final Logger LOG = LogManager.getLogger("mod-template-engine");
+  private static final String LINE_BREAK = "<br>";
 
   private final Handlebars handlebars;
 
@@ -55,17 +57,17 @@ public class HandlebarsTemplateResolver implements TemplateResolver {
       .with(new ConcurrentMapTemplateCache());
     this.handlebars.registerHelpers(ConditionalHelpers.class);
     this.handlebars.registerHelpers(StringHelpers.class);
-    // nl2br: HTML-escape the value, then turn CRLF/CR/LF line breaks into <br>. The result is
-    // wrapped in a SafeString so the already-escaped markup is emitted verbatim. Authors use it
-    // as {{nl2br order.notes}} to preserve multi-line text in HTML email output.
-    this.handlebars.registerHelper("nl2br", (Object value, Options options) -> {
-      if (value == null) {
-        return "";
-      }
-      String escaped = Handlebars.Utils.escapeExpression(value.toString()).toString();
-      String withBreaks = escaped.replaceAll("\\r\\n|\\r|\\n", "<br>\n");
-      return new Handlebars.SafeString(withBreaks);
+    // nl2sep: HTML-escape the value, then replace each CRLF/CR/LF line break with the separator
+    // given as first parameter (default <br>). The separator is taken verbatim from the template,
+    // so markup such as <br> is not escaped; the result is wrapped in a SafeString so it is
+    // emitted as is. Authors use it as {{nl2sep order.notes ", "}} to join the lines on a single line.
+    this.handlebars.registerHelper("nl2sep", (Object value, Options options) -> {
+      Object separator = options.params.length > 0 ? options.params[0] : null;
+      return nl2sep(value, separator == null ? LINE_BREAK : separator.toString());
     });
+    // nl2br: nl2sep with <br> as separator. Authors use it as {{nl2br order.notes}} to preserve
+    // multi-line text in HTML email output.
+    this.handlebars.registerHelper("nl2br", (Object value, Options options) -> nl2sep(value, LINE_BREAK));
     // numberFormat: locale-aware number formatting, the Java equivalent of Intl.NumberFormat.
     // Used as {{numberFormat amount locale="de-DE" minDecimals=2 maxDecimals=2}}.
     // locale defaults to the tenant locale, then en-US. min/maxDecimals are optional.
@@ -204,6 +206,17 @@ public class HandlebarsTemplateResolver implements TemplateResolver {
       }
       return buffer;
     });
+  }
+
+  // Shared by the nl2sep and nl2br helpers: HTML-escapes the value and replaces every CRLF/CR/LF
+  // line break with the separator, taken literally (no regex replacement semantics).
+  private static Object nl2sep(Object value, String separator) {
+    if (value == null) {
+      return "";
+    }
+    String escaped = Handlebars.Utils.escapeExpression(value.toString()).toString();
+    String joined = escaped.replaceAll("\\r\\n|\\r|\\n", Matcher.quoteReplacement(separator));
+    return new Handlebars.SafeString(joined);
   }
 
   // Parses an ISO-8601 date or date-time, tolerating an optional zone offset and date-only

@@ -76,6 +76,40 @@ class HandlebarsTemplateResolverTest {
     assertEquals("no", render("{{#equalsAny format \"Physical Resource\"}}yes{{else}}no{{/equalsAny}}", context));
   }
 
+  @Test
+  void nl2sepDefaultsToBrForEveryLineBreakStyle() {
+    JsonObject context = new JsonObject().put("notes", "one\r\ntwo\rthree\nfour");
+    assertEquals("one<br>two<br>three<br>four", render("{{nl2sep notes}}", context));
+  }
+
+  @Test
+  void nl2sepUsesGivenSeparator() {
+    JsonObject context = new JsonObject().put("notes", "Main St 1\n12345 Town");
+    assertEquals("Main St 1, 12345 Town", render("{{nl2sep notes \", \"}}", context));
+    // regex replacement metacharacters ($ and \) in the separator are emitted literally
+    assertEquals("Main St 1 $1 \\\\ 12345 Town", render("{{nl2sep notes \" $1 \\\\ \"}}", context));
+  }
+
+  @Test
+  void nl2sepEscapesValueButNotSeparator() {
+    JsonObject context = new JsonObject().put("notes", "<b>a</b>\nb & c");
+    assertEquals("&lt;b&gt;a&lt;/b&gt;<hr>b &amp; c", render("{{nl2sep notes \"<hr>\"}}", context));
+  }
+
+  @Test
+  void nl2sepRendersMissingValueAsEmptyAndNullSeparatorAsBr() {
+    assertEquals("", render("{{nl2sep missing \", \"}}", new JsonObject()));
+    JsonObject context = new JsonObject().put("notes", "a\nb");
+    assertEquals("a<br>b", render("{{nl2sep notes undefinedToken}}", context));
+  }
+
+  @Test
+  void nl2brReplacesEveryLineBreakStyleWithBr() {
+    JsonObject context = new JsonObject().put("notes", "<b>one</b>\r\ntwo\rthree\nfour & five");
+    assertEquals("&lt;b&gt;one&lt;/b&gt;<br>two<br>three<br>four &amp; five", render("{{nl2br notes}}", context));
+    assertEquals("", render("{{nl2br missing}}", new JsonObject()));
+  }
+
   private JsonObject contributorsContext() {
     return new JsonObject()
       .put("label", "Authors")
