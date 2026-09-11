@@ -32,7 +32,6 @@ import com.github.jknack.handlebars.TagType;
 import com.github.jknack.handlebars.Template;
 import com.github.jknack.handlebars.cache.ConcurrentMapTemplateCache;
 import com.github.jknack.handlebars.helper.ConditionalHelpers;
-import com.github.jknack.handlebars.helper.StringHelpers;
 
 import io.vertx.core.Future;
 import io.vertx.core.json.JsonObject;
@@ -56,14 +55,17 @@ public class HandlebarsTemplateResolver implements TemplateResolver {
       .with(EscapingStrategy.HTML_ENTITY)
       .with(new ConcurrentMapTemplateCache());
     this.handlebars.registerHelpers(ConditionalHelpers.class);
-    this.handlebars.registerHelpers(StringHelpers.class);
-    // nl2sep: HTML-escape the value, then replace each CRLF/CR/LF line break with the separator
-    // given as first parameter (default <br>). The separator is taken verbatim from the template,
-    // so markup such as <br> is not escaped; the result is wrapped in a SafeString so it is
-    // emitted as is. Authors use it as {{nl2sep order.notes ", "}} to join the lines on a single line.
+    // nl2sep: HTML-escape the value, then replace each CRLF/CR/LF line break with the mandatory
+    // separator given as first parameter. The separator is taken verbatim from the template, so
+    // markup such as <br> is not escaped; the result is wrapped in a SafeString so it is emitted
+    // as is. A missing separator fails the render, which the caller reports as a client error.
+    // Authors use it as {{nl2sep order.notes ", "}} to join the lines on a single line.
     this.handlebars.registerHelper("nl2sep", (Object value, Options options) -> {
       Object separator = options.params.length > 0 ? options.params[0] : null;
-      return nl2sep(value, separator == null ? LINE_BREAK : separator.toString());
+      if (separator == null) {
+        throw new IllegalArgumentException("nl2sep requires a separator, e.g. {{nl2sep value \", \"}}");
+      }
+      return nl2sep(value, separator.toString());
     });
     // nl2br: nl2sep with <br> as separator. Authors use it as {{nl2br order.notes}} to preserve
     // multi-line text in HTML email output.

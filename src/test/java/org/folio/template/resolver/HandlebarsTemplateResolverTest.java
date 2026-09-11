@@ -77,9 +77,9 @@ class HandlebarsTemplateResolverTest {
   }
 
   @Test
-  void nl2sepDefaultsToBrForEveryLineBreakStyle() {
+  void nl2sepReplacesEveryLineBreakStyle() {
     JsonObject context = new JsonObject().put("notes", "one\r\ntwo\rthree\nfour");
-    assertEquals("one<br>two<br>three<br>four", render("{{nl2sep notes}}", context));
+    assertEquals("one | two | three | four", render("{{nl2sep notes \" | \"}}", context));
   }
 
   @Test
@@ -97,10 +97,25 @@ class HandlebarsTemplateResolverTest {
   }
 
   @Test
-  void nl2sepRendersMissingValueAsEmptyAndNullSeparatorAsBr() {
+  void nl2sepRendersMissingValueAsEmpty() {
     assertEquals("", render("{{nl2sep missing \", \"}}", new JsonObject()));
+  }
+
+  @Test
+  void nl2sepAllowsEmptySeparator() {
     JsonObject context = new JsonObject().put("notes", "a\nb");
-    assertEquals("a<br>b", render("{{nl2sep notes undefinedToken}}", context));
+    assertEquals("ab", render("{{nl2sep notes \"\"}}", context));
+  }
+
+  @Test
+  void nl2sepWithoutSeparatorFailsWithClientError() {
+    JsonObject context = new JsonObject().put("notes", "a\nb");
+    for (String body : new String[] {"{{nl2sep notes}}", "{{nl2sep notes undefinedToken}}", "{{nl2sep missing}}"}) {
+      Future<JsonObject> future = resolver.processTemplate(new JsonObject().put("body", body), context, "text/html");
+      assertTrue(future.failed(), body);
+      assertInstanceOf(ServiceException.class, future.cause(), body);
+      assertEquals(400, ((ServiceException) future.cause()).failureCode(), body);
+    }
   }
 
   @Test
