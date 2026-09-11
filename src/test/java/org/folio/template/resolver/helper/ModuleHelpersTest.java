@@ -319,6 +319,7 @@ class ModuleHelpersTest {
   @ParameterizedTest
   @ValueSource(strings = {"{{#where contributors}}x{{/where}}", "{{#where contributors \"contributorNameType.name\"}}x{{/where}}"})
   void whereWithoutPathOrExpectedValueFails(String template) {
-    assertThrows(HandlebarsException.class, () -> render(template, contributorsContext()));
+    JsonObject context = contributorsContext();
+    assertThrows(HandlebarsException.class, () -> render(template, context));
   }
 }

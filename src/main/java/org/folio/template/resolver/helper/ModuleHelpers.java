@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
@@ -238,6 +239,7 @@ public enum ModuleHelpers implements Helper<Object> {
 
   private static final Logger LOG = LogManager.getLogger("mod-template-engine");
   private static final String LINE_BREAK = "<br>";
+  private static final Pattern LINE_BREAK_PATTERN = Pattern.compile("\\r\\n|\\r|\\n");
   private static final String DEFAULT_LOCALE = "en-US";
 
   private final String helperName;
@@ -279,7 +281,7 @@ public enum ModuleHelpers implements Helper<Object> {
       return "";
     }
     String escaped = Handlebars.Utils.escapeExpression(value.toString()).toString();
-    String joined = escaped.replaceAll("\\r\\n|\\r|\\n", Matcher.quoteReplacement(separator));
+    String joined = LINE_BREAK_PATTERN.matcher(escaped).replaceAll(Matcher.quoteReplacement(separator));
     return new Handlebars.SafeString(joined);
   }
 
