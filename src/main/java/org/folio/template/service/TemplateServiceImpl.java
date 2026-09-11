@@ -51,7 +51,7 @@ public class TemplateServiceImpl implements TemplateService {
   private static final Logger LOG = LogManager.getLogger("mod-template-engine");
   private static final LocaleSettings DEFAULT_LOCALE = new LocaleSettings("en-US", "UTC");
   private static final String PREVIEW_OUTPUT_FORMAT = "text/html";
-  private static final String DEFAULT_TEMPLATE_RESOLVER = "handlebars";
+  private static final String DEFAULT_TEMPLATE_RESOLVER = "mustache";
 
   private record Rendered(JsonObject content, List<Attachment> attachments) {}
 
@@ -85,7 +85,6 @@ public class TemplateServiceImpl implements TemplateService {
   @Override
   public Future<String> addTemplate(Template template) {
     LOG.debug("addTemplate:: Adding Template with ID : {}", template.getId());
-    applyDefaultResolver(template);
     validateTemplate(template);
     if (template.getId() == null) {
       template.setId(UUID.randomUUID().toString());
@@ -96,7 +95,6 @@ public class TemplateServiceImpl implements TemplateService {
   @Override
   public Future<Boolean> updateTemplate(Template template) {
     LOG.debug("updateTemplate:: Updating Template with ID : {}", template.getId());
-    applyDefaultResolver(template);
     validateTemplate(template);
     return getTemplateById(template.getId())
       .compose(optionalTemplate -> optionalTemplate
@@ -151,7 +149,6 @@ public class TemplateServiceImpl implements TemplateService {
 
         LocaleSettings config = compositeFuture.resultAt(1);
 
-        applyDefaultResolver(template);
         validateTemplate(template);
         return render(templateContent, contextObject, template.getTemplateResolver(),
             templateRequest.getOutputFormat(), config)
@@ -216,12 +213,6 @@ public class TemplateServiceImpl implements TemplateService {
     return TemplateResolver.createProxy(vertx, address)
       .processTemplate(mapFrom(content), context, outputFormat)
       .map(json -> new Rendered(json, preProcessor.getAttachments()));
-  }
-
-  private void applyDefaultResolver(Template template) {
-    if (StringUtils.isBlank(template.getTemplateResolver())) {
-      template.setTemplateResolver(DEFAULT_TEMPLATE_RESOLVER);
-    }
   }
 
   private void validateTemplate(Template template) {

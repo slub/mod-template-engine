@@ -20,8 +20,7 @@
     },
     "templateResolver": {
       "type": "string",
-      "description": "Template engine name (defaults to 'handlebars' when omitted)",
-      "default": "handlebars"
+      "description": "Template engine name"
     },
     "localizedTemplates": {
       "type": "object",
@@ -42,6 +41,7 @@
     }
   },
   "required": [
+    "templateResolver",
     "localizedTemplates",
     "outputFormats"
   ]

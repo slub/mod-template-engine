@@ -13,8 +13,8 @@
     },
     "templateResolver": {
       "type": "string",
-      "description": "Template engine name (defaults to 'handlebars' when omitted)",
-      "default": "handlebars"
+      "description": "Template engine name (defaults to 'mustache' when omitted)",
+      "default": "mustache"
     },
     "context": {
       "type": "object",

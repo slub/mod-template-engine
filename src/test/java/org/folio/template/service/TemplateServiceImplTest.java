@@ -16,6 +16,7 @@ import org.folio.rest.jaxrs.model.Context;
 import org.folio.rest.jaxrs.model.LocalizedTemplates;
 import org.folio.rest.jaxrs.model.LocalizedTemplatesProperty;
 import org.folio.rest.jaxrs.model.Template;
+import org.folio.rest.jaxrs.model.TemplatePreviewRequest;
 import org.folio.rest.jaxrs.model.TemplateProcessingRequest;
 import org.folio.template.client.LocaleSettings;
 import org.folio.template.client.SettingsClient;
@@ -26,7 +27,6 @@ import org.folio.template.resolver.TemplateResolver;
 import org.folio.template.util.TemplateEngineHelper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import io.vertx.core.Future;
@@ -116,32 +116,35 @@ class TemplateServiceImplTest {
   }
 
   @Test
-  void addTemplateDefaultsBlankResolverToHandlebars(Vertx vertx) throws Exception {
-    // handlebars must be a known resolver for validation to pass (no rendering happens here).
+  void previewTemplateWithoutResolverDefaultsToMustache(Vertx vertx, VertxTestContext ctx) throws Exception {
+    // Only mustache is registered: had the blank resolver defaulted to anything else,
+    // the supported-resolver check would reject the request.
+    String address = "template-resolver.mustache.test";
+    new ServiceBinder(vertx).setAddress(address).register(TemplateResolver.class, new MustacheTemplateResolver());
     vertx.sharedData().<String, String>getLocalMap(TemplateEngineHelper.TEMPLATE_RESOLVERS_LOCAL_MAP)
-      .put("handlebars", "template-resolver.handlebars.queue");
+      .put("mustache", address);
 
     TemplateDao dao = Mockito.mock(TemplateDao.class);
     SettingsClient settings = Mockito.mock(SettingsClient.class);
-    ArgumentCaptor<Template> captor = ArgumentCaptor.forClass(Template.class);
-    when(dao.addTemplate(captor.capture())).thenReturn(Future.succeededFuture("new-id"));
+    when(settings.lookupLocaleSetting()).thenReturn(Future.succeededFuture(new LocaleSettings("en-US", "UTC")));
 
     TemplateServiceImpl service = newServiceWithMocks(vertx, dao, settings);
 
-    Template template = new Template()  // no templateResolver set
-      .withOutputFormats(List.of(FORMAT))
-      .withLocalizedTemplates(new LocalizedTemplates().withAdditionalProperty(LANG,
-        new LocalizedTemplatesProperty().withHeader("Hi").withBody("Body")));
+    TemplatePreviewRequest req = new TemplatePreviewRequest()  // no templateResolver set
+      .withHeader("Hi")
+      .withBody("Hello {{name}}")
+      .withContext(new Context().withAdditionalProperty("name", "Alex"));
 
-    service.addTemplate(template);
-
-    assertEquals("handlebars", captor.getValue().getTemplateResolver());
+    service.previewTemplate(req).onComplete(ctx.succeeding(result -> ctx.verify(() -> {
+      assertEquals("Hello Alex", result.getBody());
+      ctx.completeNow();
+    })));
   }
 
   @Test
-  void processTemplateDefaultsBlankResolverToHandlebars(Vertx vertx, VertxTestContext ctx) throws Exception {
-    // Only the handlebars resolver is registered, so a successful render proves the blank
-    // resolver defaulted to handlebars (and used the Handlebars engine).
+  void processTemplateWithHandlebarsResolverRendersHandlebarsSyntax(Vertx vertx, VertxTestContext ctx)
+    throws Exception {
+    // {{else}} is Handlebars-only, so rendering "Y" proves the Handlebars engine was used.
     String address = "template-resolver.handlebars.queue";
     new ServiceBinder(vertx).setAddress(address).register(TemplateResolver.class, new HandlebarsTemplateResolver());
     vertx.sharedData().<String, String>getLocalMap(TemplateEngineHelper.TEMPLATE_RESOLVERS_LOCAL_MAP)
@@ -150,11 +153,8 @@ class TemplateServiceImplTest {
     TemplateDao dao = Mockito.mock(TemplateDao.class);
     SettingsClient settings = Mockito.mock(SettingsClient.class);
 
-    Template template = new Template()  // no templateResolver set
-      .withId("22222222-2222-2222-2222-222222222222")
-      .withOutputFormats(List.of(FORMAT))
-      .withLocalizedTemplates(new LocalizedTemplates().withAdditionalProperty(LANG,
-        new LocalizedTemplatesProperty().withHeader("Hi").withBody("{{#if flag}}Y{{else}}N{{/if}}")));
+    Template template = template("handlebars",
+      new LocalizedTemplatesProperty().withHeader("Hi").withBody("{{#if flag}}Y{{else}}N{{/if}}"));
     when(dao.getTemplateById(template.getId())).thenReturn(Future.succeededFuture(Optional.of(template)));
     when(settings.lookupLocaleSetting()).thenReturn(Future.succeededFuture(new LocaleSettings("en-US", "UTC")));
 
