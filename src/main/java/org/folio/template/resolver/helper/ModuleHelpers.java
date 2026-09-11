@@ -24,6 +24,7 @@ import org.folio.template.util.TemplateEngineHelper;
 import com.github.jknack.handlebars.Context;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Helper;
+import com.github.jknack.handlebars.HelperRegistry;
 import com.github.jknack.handlebars.Options;
 import com.github.jknack.handlebars.TagType;
 import com.github.jknack.handlebars.Template;
@@ -31,7 +32,9 @@ import com.github.jknack.handlebars.Template;
 /**
  * Module specific Handlebars helpers: line break handling, locale-aware number and date
  * formatting, string membership and list filtering. Like {@code ConditionalHelpers} each constant
- * is a helper registered under its own name via {@code handlebars.registerHelpers(ModuleHelpers.class)}.
+ * is a helper; unlike there, the constant name follows Java naming, so the helper name used in
+ * templates is carried separately. Register all helpers with {@link #register(HelperRegistry)},
+ * not with {@code registerHelpers(ModuleHelpers.class)}, which would use the constant names.
  */
 public enum ModuleHelpers implements Helper<Object> {
 
@@ -43,7 +46,7 @@ public enum ModuleHelpers implements Helper<Object> {
    *   {{nl2br order.notes}}
    * }</pre>
    */
-  nl2br {
+  NL2BR("nl2br") {
     @Override
     public Object apply(final Object value, final Options options) {
       return replaceLineBreaks(value, LINE_BREAK);
@@ -60,7 +63,7 @@ public enum ModuleHelpers implements Helper<Object> {
    *   {{nl2sep order.notes ", "}}
    * }</pre>
    */
-  nl2sep {
+  NL2SEP("nl2sep") {
     @Override
     public Object apply(final Object value, final Options options) {
       Object separator = options.params.length > 0 ? options.params[0] : null;
@@ -79,7 +82,7 @@ public enum ModuleHelpers implements Helper<Object> {
    *   {{numberFormat amount locale="de-DE" minDecimals=2 maxDecimals=2}}
    * }</pre>
    */
-  numberFormat {
+  NUMBER_FORMAT("numberFormat") {
     @Override
     public Object apply(final Object value, final Options options) {
       if (value == null) {
@@ -110,7 +113,7 @@ public enum ModuleHelpers implements Helper<Object> {
    *   {{dateFormat someIsoDate locale="de-DE" pattern="yyyy-MM-dd"}}
    * }</pre>
    */
-  dateFormat {
+  DATE_FORMAT("dateFormat") {
     @Override
     public Object apply(final Object value, final Options options) {
       if (value == null) {
@@ -151,7 +154,7 @@ public enum ModuleHelpers implements Helper<Object> {
    *   {{#if (equalsAny orderLine.orderFormat "P/E Mix" "Physical Resource")}}...{{/if}}
    * }</pre>
    */
-  equalsAny {
+  EQUALS_ANY("equalsAny") {
     @Override
     public Object apply(final Object value, final Options options) throws IOException {
       boolean matched = false;
@@ -183,7 +186,7 @@ public enum ModuleHelpers implements Helper<Object> {
    *   {{#where orderLine.contributors "contributorNameType.name" "Personal name"}}{{#unless @first}}; {{/unless}}{{contributor}}{{/where}}
    * }</pre>
    */
-  where {
+  WHERE("where") {
     @Override
     public Object apply(final Object value, final Options options) throws IOException {
       Options.Buffer buffer = options.buffer();
@@ -236,6 +239,32 @@ public enum ModuleHelpers implements Helper<Object> {
   private static final Logger LOG = LogManager.getLogger("mod-template-engine");
   private static final String LINE_BREAK = "<br>";
   private static final String DEFAULT_LOCALE = "en-US";
+
+  private final String helperName;
+
+  ModuleHelpers(final String helperName) {
+    this.helperName = helperName;
+  }
+
+  /**
+   * The name under which the helper is called in templates, e.g. {@code nl2br}.
+   *
+   * @return The helper name.
+   */
+  public String helperName() {
+    return helperName;
+  }
+
+  /**
+   * Registers every module helper under its helper name.
+   *
+   * @param registry The Handlebars instance or another helper registry.
+   */
+  public static void register(final HelperRegistry registry) {
+    for (ModuleHelpers helper : values()) {
+      registry.registerHelper(helper.helperName, helper);
+    }
+  }
 
   /**
    * HTML-escapes the value and replaces every CRLF/CR/LF line break with the separator, taken

@@ -1,6 +1,7 @@
 package org.folio.template.resolver.helper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,7 +31,7 @@ class ModuleHelpersTest {
   @BeforeEach
   void setUp() {
     handlebars = new Handlebars().with(EscapingStrategy.HTML_ENTITY);
-    handlebars.registerHelpers(ModuleHelpers.class);
+    ModuleHelpers.register(handlebars);
   }
 
   // Mirrors HandlebarsTemplateResolver: the context reaches Handlebars as plain maps and lists.
@@ -46,8 +47,10 @@ class ModuleHelpersTest {
 
   @ParameterizedTest
   @EnumSource(ModuleHelpers.class)
-  void everyHelperIsRegisteredUnderItsName(ModuleHelpers helper) {
-    assertSame(helper, handlebars.helper(helper.name()));
+  void everyHelperIsRegisteredUnderItsHelperName(ModuleHelpers helper) {
+    assertSame(helper, handlebars.helper(helper.helperName()));
+    // the upper-case constant name is not a helper name
+    assertNull(handlebars.helper(helper.name()));
   }
 
   // nl2br

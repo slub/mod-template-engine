@@ -37,7 +37,7 @@ public class HandlebarsTemplateResolver implements TemplateResolver {
       .with(EscapingStrategy.HTML_ENTITY)
       .with(new ConcurrentMapTemplateCache());
     this.handlebars.registerHelpers(ConditionalHelpers.class);
-    this.handlebars.registerHelpers(ModuleHelpers.class);
+    ModuleHelpers.register(this.handlebars);
   }
 
   @Override

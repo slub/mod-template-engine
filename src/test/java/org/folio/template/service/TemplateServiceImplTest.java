@@ -3,6 +3,7 @@ package org.folio.template.service;
 import static org.folio.okapi.common.XOkapiHeaders.TENANT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
@@ -27,7 +28,6 @@ import org.folio.template.resolver.TemplateResolver;
 import org.folio.template.util.TemplateEngineHelper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mockito;
 
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
@@ -73,8 +73,8 @@ class TemplateServiceImplTest {
   @Test
   void processTemplateWithUnregisteredResolverFailsWithBadRequest(Vertx vertx, VertxTestContext ctx)
     throws Exception {
-    TemplateDao dao = Mockito.mock(TemplateDao.class);
-    SettingsClient settings = Mockito.mock(SettingsClient.class);
+    TemplateDao dao = mock(TemplateDao.class);
+    SettingsClient settings = mock(SettingsClient.class);
 
     Template template = template("definitely-not-registered",
       new LocalizedTemplatesProperty().withHeader("Hi").withBody("Body"));
@@ -99,8 +99,8 @@ class TemplateServiceImplTest {
     vertx.sharedData().<String, String>getLocalMap(TemplateEngineHelper.TEMPLATE_RESOLVERS_LOCAL_MAP)
       .put("mustache", address);
 
-    TemplateDao dao = Mockito.mock(TemplateDao.class);
-    SettingsClient settings = Mockito.mock(SettingsClient.class);
+    TemplateDao dao = mock(TemplateDao.class);
+    SettingsClient settings = mock(SettingsClient.class);
 
     // Header-only template: no body -> Result.getBody() is null (H6 NPE without the guard).
     Template template = template("mustache", new LocalizedTemplatesProperty().withHeader("Hi"));
@@ -124,8 +124,8 @@ class TemplateServiceImplTest {
     vertx.sharedData().<String, String>getLocalMap(TemplateEngineHelper.TEMPLATE_RESOLVERS_LOCAL_MAP)
       .put("mustache", address);
 
-    TemplateDao dao = Mockito.mock(TemplateDao.class);
-    SettingsClient settings = Mockito.mock(SettingsClient.class);
+    TemplateDao dao = mock(TemplateDao.class);
+    SettingsClient settings = mock(SettingsClient.class);
     when(settings.lookupLocaleSetting()).thenReturn(Future.succeededFuture(new LocaleSettings("en-US", "UTC")));
 
     TemplateServiceImpl service = newServiceWithMocks(vertx, dao, settings);
@@ -150,8 +150,8 @@ class TemplateServiceImplTest {
     vertx.sharedData().<String, String>getLocalMap(TemplateEngineHelper.TEMPLATE_RESOLVERS_LOCAL_MAP)
       .put("handlebars", address);
 
-    TemplateDao dao = Mockito.mock(TemplateDao.class);
-    SettingsClient settings = Mockito.mock(SettingsClient.class);
+    TemplateDao dao = mock(TemplateDao.class);
+    SettingsClient settings = mock(SettingsClient.class);
 
     Template template = template("handlebars",
       new LocalizedTemplatesProperty().withHeader("Hi").withBody("{{#if flag}}Y{{else}}N{{/if}}"));
