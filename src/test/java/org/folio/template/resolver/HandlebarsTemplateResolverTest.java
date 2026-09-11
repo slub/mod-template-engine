@@ -76,6 +76,80 @@ class HandlebarsTemplateResolverTest {
     assertEquals("no", render("{{#equalsAny format \"Physical Resource\"}}yes{{else}}no{{/equalsAny}}", context));
   }
 
+  private JsonObject contributorsContext() {
+    return new JsonObject()
+      .put("label", "Authors")
+      .put("contributors", new JsonArray()
+        .add(contributor("Ada", "Personal name"))
+        .add(contributor("ACME Corp", "Corporate name"))
+        .add(contributor("Grace", "Personal name")));
+  }
+
+  private JsonObject contributor(String name, String type) {
+    return new JsonObject()
+      .put("contributor", name)
+      .put("contributorNameType", new JsonObject().put("name", type));
+  }
+
+  @Test
+  void whereRendersOnlyElementsMatchingNestedPath() {
+    assertEquals("Ada; Grace", render(
+      "{{#where contributors \"contributorNameType.name\" \"Personal name\"}}"
+        + "{{#unless @first}}; {{/unless}}{{contributor}}{{/where}}",
+      contributorsContext()));
+  }
+
+  @Test
+  void whereLoopVariablesCountFilteredMatchesOnly() {
+    // @index/@index_1/@last must refer to the filtered list, not the source list, where
+    // Grace is the third element.
+    assertEquals("0/1:Ada,1/2:Grace.", render(
+      "{{#where contributors \"contributorNameType.name\" \"Personal name\"}}"
+        + "{{@index}}/{{@index_1}}:{{contributor}}{{#if @last}}.{{else}},{{/if}}{{/where}}",
+      contributorsContext()));
+  }
+
+  @Test
+  void whereSupportsBlockParamsAndParentContext() {
+    assertEquals("Authors 0=Ada Authors 1=Grace ", render(
+      "{{#where contributors \"contributorNameType.name\" \"Personal name\" as |person idx|}}"
+        + "{{../label}} {{idx}}={{person.contributor}} {{/where}}",
+      contributorsContext()));
+  }
+
+  @Test
+  void whereRendersElseBlockWhenNothingMatches() {
+    assertEquals("none", render(
+      "{{#where contributors \"contributorNameType.name\" \"Meeting name\"}}{{contributor}}{{else}}none{{/where}}",
+      contributorsContext()));
+  }
+
+  @Test
+  void whereRendersElseBlockWhenValueIsNotAList() {
+    JsonObject context = new JsonObject().put("contributors", "Ada");
+    assertEquals("none", render(
+      "{{#where contributors \"contributorNameType.name\" \"Personal name\"}}x{{else}}none{{/where}}", context));
+    assertEquals("none", render(
+      "{{#where missing \"contributorNameType.name\" \"Personal name\"}}x{{else}}none{{/where}}", new JsonObject()));
+  }
+
+  @Test
+  void whereComparesByStringForm() {
+    JsonObject context = new JsonObject().put("lines", new JsonArray()
+      .add(new JsonObject().put("qty", 2).put("title", "A"))
+      .add(new JsonObject().put("qty", 3).put("title", "B")));
+    assertEquals("A", render("{{#where lines \"qty\" \"2\"}}{{title}}{{/where}}", context));
+  }
+
+  @Test
+  void whereWithNullExpectedMatchesElementsWithoutValue() {
+    // An absent variable as the expected value resolves to null and matches only absent/null paths.
+    JsonObject context = new JsonObject().put("lines", new JsonArray()
+      .add(new JsonObject().put("code", "X").put("title", "A"))
+      .add(new JsonObject().put("title", "B")));
+    assertEquals("B", render("{{#where lines \"code\" undefinedToken}}{{title}}{{/where}}", context));
+  }
+
   @Test
   void malformedTemplateFailsWithClientError() {
     Future<JsonObject> future = resolver.processTemplate(

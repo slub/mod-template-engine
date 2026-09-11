@@ -10,6 +10,9 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.FormatStyle;
 import java.time.temporal.TemporalAccessor;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -25,6 +28,7 @@ import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.HandlebarsException;
 import com.github.jknack.handlebars.Options;
 import com.github.jknack.handlebars.TagType;
+import com.github.jknack.handlebars.Template;
 import com.github.jknack.handlebars.cache.ConcurrentMapTemplateCache;
 import com.github.jknack.handlebars.helper.ConditionalHelpers;
 import com.github.jknack.handlebars.helper.StringHelpers;
@@ -145,6 +149,60 @@ public class HandlebarsTemplateResolver implements TemplateResolver {
         return matched ? options.fn() : options.inverse();
       }
       return matched;
+    });
+
+    // where: filters a list to the elements whose value at a dot-notation path equals an expected
+    // string, and renders the block once per match. First arg is the list, param0 the path (resolved
+    // per element, Maps or beans), param1 the expected value; comparison is by string form, and a
+    // null/absent value matches only a null expected. Exposes the usual loop vars over the *filtered*
+    // matches -- @index, @first, @last, @odd, @even, @index_1 -- plus block params (as |item idx|),
+    // and renders {{else}} when nothing matches, e.g.
+    // {{#where orderLine.contributors "contributorNameType.name" "Personal name"}}{{#unless @first}}; {{/unless}}{{contributor}}{{/where}}
+    this.handlebars.registerHelper("where", (Object value, Options options) -> {
+      Options.Buffer buffer = options.buffer();
+
+      // Not a list → render the {{else}} block (if any) and stop.
+      if (!(value instanceof Iterable)) {
+        buffer.append(options.inverse());
+        return buffer;
+      }
+
+      String path = options.param(0);                 // e.g. "contributorNameType.name"
+      Object expected = options.param(1);             // e.g. "Personal name"
+      String expectedStr = expected == null ? null : expected.toString();
+
+      Context parent = options.context;
+      Template fn = options.fn;
+
+      // Pass 1: keep only matching elements (so @last is correct).
+      List<Object> matches = new ArrayList<>();
+      for (Object element : (Iterable<Object>) value) {
+        Object actual = Context.newContext(element).get(path);   // resolve path on element only
+        String actualStr = actual == null ? null : actual.toString();
+        boolean hit = expectedStr == null ? actualStr == null : expectedStr.equals(actualStr);
+        if (hit) {
+          matches.add(element);
+        }
+      }
+
+      // Pass 2: render each match with loop variables available.
+      int size = matches.size();
+      for (int i = 0; i < size; i++) {
+        Object it = matches.get(i);
+        Context itCtx = Context.newContext(parent, it)
+          .combine("@index", i)
+          .combine("@first", i == 0 ? "first" : "")
+          .combine("@last", i == size - 1 ? "last" : "")
+          .combine("@odd", i % 2 == 0 ? "" : "odd")
+          .combine("@even", i % 2 == 0 ? "even" : "")
+          .combine("@index_1", i + 1);
+        buffer.append(options.apply(fn, itCtx, Arrays.asList(it, i)));
+      }
+
+      if (size == 0) {
+        buffer.append(options.inverse());
+      }
+      return buffer;
     });
   }
 
